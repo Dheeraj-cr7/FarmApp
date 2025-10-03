@@ -2,6 +2,8 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Stack } from "expo-router";
 import { useEffect, useState } from "react";
 import { ActivityIndicator, StyleSheet, View } from "react-native";
+import NavigationHandler from "./NavigationHandler"; // import the handler
+import { ThemeProvider } from "./themeContext"; // relative path
 
 export default function RootLayout() {
   const [loading, setLoading] = useState(true);
@@ -10,7 +12,7 @@ export default function RootLayout() {
   useEffect(() => {
     const checkToken = async () => {
       try {
-        const stored = await AsyncStorage.getItem("userToken"); // Check if token exists
+        const stored = await AsyncStorage.getItem("userToken");
         setToken(stored);
       } catch (e) {
         console.error("Error loading token", e);
@@ -18,7 +20,6 @@ export default function RootLayout() {
         setLoading(false);
       }
     };
-
     checkToken();
   }, []);
 
@@ -31,18 +32,21 @@ export default function RootLayout() {
   }
 
   return (
-    <Stack screenOptions={{ headerShown: false }}>
-      {token ? (
-        // If user has token, load tab navigation
-        <Stack.Screen name="(tabs)" />
-      ) : (
-        // If no token, show login/signup flow
-        <>
-          <Stack.Screen name="login" />
-          <Stack.Screen name="signup" />
-        </>
-      )}
-    </Stack>
+    <ThemeProvider>
+      {/* Device bars follow theme */}
+      <NavigationHandler />
+
+      <Stack screenOptions={{ headerShown: false }}>
+        {token ? (
+          <Stack.Screen name="(tabs)" />
+        ) : (
+          <>
+            <Stack.Screen name="login" />
+            <Stack.Screen name="signup" />
+          </>
+        )}
+      </Stack>
+    </ThemeProvider>
   );
 }
 
