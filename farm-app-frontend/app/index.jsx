@@ -63,3 +63,47 @@
 //   logo: { width: 150, height: 150 },
 //   appName: { fontSize: 22, fontWeight: "bold", marginTop: 20, color: "#333" },
 // });
+
+
+import { useRouter } from "expo-router";
+import { useEffect } from "react";
+import { supabase } from "../supabase"; // adjust path if needed
+
+const Index = () => {
+    const router = useRouter();
+
+    useEffect(() => {
+        const checkSession = async () => {
+            const {
+                data: { session },
+            } = await supabase.auth.getSession();
+
+            if (session) {
+                router.replace("/(tabs)"); // ✅ go to main app
+            } else {
+                router.replace("/login"); // ❌ no session, go login
+            }
+        };
+
+        checkSession();
+
+        // optional: listen for auth changes
+        const { data: authListener } = supabase.auth.onAuthStateChange(
+            (_event, session) => {
+                if (session) {
+                    router.replace("/(tabs)");
+                } else {
+                    router.replace("/login");
+                }
+            }
+        );
+
+        return () => {
+            authListener.subscription.unsubscribe();
+        };
+    }, []);
+
+    return null; // nothing to render, just redirect
+};
+
+export default Index;

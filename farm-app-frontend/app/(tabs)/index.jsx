@@ -1,9 +1,13 @@
+import { useRouter } from "expo-router";
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { useTheme } from "../themeContext"; // adjust path if needed
 
 export default function HomeScreen() {
   const { theme } = useTheme();
   const isDark = theme === "dark";
+  const router = useRouter()
+
+
 
   return (
     <ScrollView

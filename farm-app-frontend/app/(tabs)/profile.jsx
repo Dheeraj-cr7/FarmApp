@@ -2,6 +2,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useRouter } from "expo-router";
 import { useEffect, useState } from "react";
 import { StyleSheet, Switch, Text, TouchableOpacity, View } from "react-native";
+import { supabase } from "../../supabase";
 import { useTheme } from "../themeContext";
 
 export default function ProfileScreen() {
@@ -22,12 +23,18 @@ export default function ProfileScreen() {
     loadUser();
   }, []);
 
-  const handleLogout = async () => {
-    await AsyncStorage.removeItem("userToken");
-    await AsyncStorage.removeItem("userEmail");
-    await AsyncStorage.removeItem("userName");
+  const handleLogOut = async () => {
+    const { error } = await supabase.auth.signOut();
     router.replace("/login");
   };
+
+
+  // const handleLogout = async () => {
+  //   await AsyncStorage.removeItem("userToken");
+  //   await AsyncStorage.removeItem("userEmail");
+  //   await AsyncStorage.removeItem("userName");
+  //   router.replace("/login");
+  // };
 
   return (
     <View style={[styles.container, { backgroundColor: isDark ? "#121212" : "#fff" }]}>
@@ -42,12 +49,12 @@ export default function ProfileScreen() {
       </View>
 
       <View style={[styles.card, { backgroundColor: isDark ? "#1e1e1e" : "#f9f9f9" }]}>
-       <View style={styles.option}>
+        <View style={styles.option}>
           <View style={styles.optionRow}>
-          <Text style={[styles.optionText, { color: isDark ? "#fff" : "#007bff" }]}>Dark Mode</Text>
-          <Switch value={isDark} onValueChange={toggleTheme} />  
+            <Text style={[styles.optionText, { color: isDark ? "#fff" : "#007bff" }]}>Dark Mode</Text>
+            <Switch value={isDark} onValueChange={toggleTheme} />
+          </View>
         </View>
-       </View>
 
         <TouchableOpacity style={styles.option}>
           <Text style={[styles.optionText, { color: isDark ? "#007bff" : "#007bff" }]}>Change Password</Text>
@@ -62,7 +69,7 @@ export default function ProfileScreen() {
 
       <TouchableOpacity
         style={[styles.logoutBtn, { backgroundColor: isDark ? "#ff4d6d" : "#e63946" }]}
-        onPress={handleLogout}
+        onPress={handleLogOut}
       >
         <Text style={styles.logoutText}>Logout</Text>
       </TouchableOpacity>
@@ -76,7 +83,7 @@ const styles = StyleSheet.create({
   card: { padding: 15, borderRadius: 10, marginBottom: 20, borderWidth: 1, borderColor: "#ddd" },
   label: { fontSize: 16, fontWeight: "600", marginTop: 5 },
   value: { fontSize: 16, marginBottom: 10 },
-  optionRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center"},
+  optionRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
   option: { paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: "#eee" },
   optionText: { fontSize: 16 },
   logoutBtn: { padding: 15, borderRadius: 10, alignItems: "center", marginTop: "auto" },

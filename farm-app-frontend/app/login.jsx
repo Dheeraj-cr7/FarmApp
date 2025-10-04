@@ -1,7 +1,8 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useRouter } from "expo-router";
 import { useState } from "react";
-import { StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
+import { ActivityIndicator, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
+import { supabase } from "../supabase";
 import { useTheme } from "./themeContext"; // adjust path if needed
 
 export default function LoginScreen() {
@@ -11,6 +12,25 @@ export default function LoginScreen() {
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [loading, setLoading] = useState(false)
+
+  async function signInWithEmail() {
+    setLoading(true);
+    try {
+      const { error } = await supabase.auth.signInWithPassword({
+        email: email,
+        password: password,
+      });
+      setLoading(false);
+      router.push("/(tabs)/")
+    }
+    catch (error) {
+      console.error("Error message:", error)
+    }
+
+  }
+
+
 
   const handleLogin = async () => {
     if (!email || !password) {
@@ -20,14 +40,20 @@ export default function LoginScreen() {
 
     try {
       await AsyncStorage.setItem("userToken", "dummy-token");
-      await AsyncStorage.setItem("userEmail", email); 
-      await AsyncStorage.setItem("userName", ""); 
+      await AsyncStorage.setItem("userEmail", email);
+      await AsyncStorage.setItem("userName", "");
       router.replace("/(tabs)");
     } catch (error) {
       console.error("Login failed:", error);
       alert("Login failed. Try again.");
     }
   };
+
+  if (loading) {
+    return (
+      <ActivityIndicator />
+    )
+  }
 
   return (
     <View style={[styles.container, { backgroundColor: isDark ? "#121212" : "#fff" }]}>
@@ -51,7 +77,7 @@ export default function LoginScreen() {
         secureTextEntry
       />
 
-      <TouchableOpacity style={[styles.button, { backgroundColor: "#22c55e" }]} onPress={handleLogin}>
+      <TouchableOpacity style={[styles.button, { backgroundColor: "#22c55e" }]} onPress={() => signInWithEmail()}>
         <Text style={[styles.buttonText, { color: "#fff" }]}>Login</Text>
       </TouchableOpacity>
 

@@ -1,7 +1,8 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useRouter } from "expo-router";
 import { useState } from "react";
-import { StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
+import { Alert, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
+import { supabase } from "../supabase";
 import { useTheme } from "./themeContext"; // adjust the path if needed
 
 export default function SignupScreen() {
@@ -13,6 +14,63 @@ export default function SignupScreen() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [loading, setLoading] = useState(false)
+
+  async function signUpWithEmail() {
+    setLoading(true);
+
+    if (!email || !password || !confirmPassword) {
+      alert("Please fill in all fields");
+      setLoading(false);
+      return;
+    }
+    if (password !== confirmPassword) {
+      alert("Passwords do not match");
+      setLoading(false);
+      return;
+    }
+
+    try {
+      const {
+        data: { user, session },
+        error,
+      } = await supabase.auth.signUp({
+        email,
+        password,
+      });
+
+      if (error) {
+        Alert.alert(error.message);
+        setLoading(false);
+        return;
+      }
+
+      if (user) {
+        // Insert into profiles table with id + name only
+        const { error: insertError } = await supabase.from("profiles").insert([
+          {
+            id: user.id,       // must match auth.users.id (foreign key)
+            full_name: name,   // only store the name
+          },
+        ]);
+
+        if (insertError) {
+          console.error("Profile insert error:", insertError);
+        }
+      }
+
+      if (!session) {
+        Alert.alert("Please check your inbox for email verification!");
+      } else {
+        router.replace("/(tabs)");
+      }
+    } catch (err) {
+      console.error("Signup failed:", err);
+      Alert.alert("Signup failed. Try again.");
+    } finally {
+      setLoading(false);
+    }
+  }
 
   const handleSignup = async () => {
     if (!name || !email || !password || !confirmPassword) {
@@ -76,7 +134,7 @@ export default function SignupScreen() {
 
       <TouchableOpacity
         style={[styles.button, { backgroundColor: isDark ? "#22c55e" : "#22c55e" }]}
-        onPress={handleSignup}
+        onPress={() => signUpWithEmail()}
       >
         <Text style={[styles.buttonText, { color: "#fff" }]}>Sign Up</Text>
       </TouchableOpacity>
