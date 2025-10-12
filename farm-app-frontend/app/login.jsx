@@ -17,17 +17,37 @@ export default function LoginScreen() {
   async function signInWithEmail() {
     setLoading(true);
     try {
-      const { error } = await supabase.auth.signInWithPassword({
+      const { data, error } = await supabase.auth.signInWithPassword({ // <--- IMPORTANT: Destructure 'data' and 'error'
         email: email,
         password: password,
       });
-      setLoading(false);
-      router.push("/(tabs)/")
-    }
-    catch (error) {
-      console.error("Error message:", error)
-    }
 
+      setLoading(false); // Stop loading before the check
+
+      if (error) {
+        // If there's an error (e.g., "Invalid login credentials"), show an alert
+        alert(error.message);
+        console.error("Login Error:", error.message);
+        return; // Stop execution here
+      }
+
+      // If no error, the login was successful, so redirect
+      if (data.session && data.user) {
+        // Optional: you might want to store user details here if needed
+        // await AsyncStorage.setItem("userToken", data.session.access_token);
+        router.push("/(tabs)/");
+      } else {
+        // Handle unexpected case where data is missing but no direct error
+        alert("Authentication failed. Please check your network.");
+      }
+
+    } catch (error) {
+      // This catches network errors or other unexpected exceptions
+      console.error("Catch Block Error:", error);
+      alert("An unexpected error occurred during login.");
+    } finally {
+      setLoading(false); // Ensure loading is stopped in all cases if not stopped earlier
+    }
   }
 
 

@@ -38,7 +38,7 @@ export default function PredictionSection() {
       </View>
 
       <TouchableOpacity style={[styles.predictBtn, { backgroundColor: "#22c55e" }]} onPress={handlePredict}>
-        <Text style={styles.predictText}>Get Predictionsx`</Text>
+        <Text style={styles.predictText}>Get Predictions</Text>
       </TouchableOpacity>
 
       {loading && <ActivityIndicator size="large" color="green" style={{ marginTop: 20 }} />}
