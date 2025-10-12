@@ -41,6 +41,7 @@ const generateMockCropData = (cropName, userId, soilMoisture) => {
     // FIX: Added default non-null values to satisfy database constraints.
     return {
         user_id: userId,
+        crop_name: cropName,
         nitrogen: generateValue(profile.N),
         phosphorus: generateValue(profile.P),
         potassium: generateValue(profile.K),

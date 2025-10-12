@@ -11,6 +11,7 @@ export default function RecommendationScreen() {
       className="flex-1 p-4"
       style={{ backgroundColor: isDark ? "#121212" : "#fefefe" }}
     >
+
       {/* Title */}
       <Text
         className="text-2xl font-bold mb-4"

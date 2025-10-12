@@ -48,10 +48,12 @@ export default function TabLayout() {
           tabBarIcon: ({ color, size }) => (
             <MaterialIcons name="lightbulb-outline" size={size} color={color} />
           ),
+
         }}
+
       />
 
-      <Tabs.Screen
+      {/* <Tabs.Screen
         name="Connected_Sensors"
         options={{
           title: "Connected Sensors",
@@ -59,7 +61,7 @@ export default function TabLayout() {
             <MaterialIcons name="sensors" size={size} color={color} />
           ),
         }}
-      />
+      /> */}
 
       <Tabs.Screen
         name="profile"
