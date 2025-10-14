@@ -1,4 +1,4 @@
-import { Button, FlatList, StyleSheet, Text, View } from "react-native";
+import { FlatList, StyleSheet, Text, View } from "react-native";
 import { useTheme } from "../app/themeContext"; // adjust path if needed
 
 const dummyHistory = [
@@ -44,9 +44,9 @@ export default function HistorySection() {
       />
 
       {/* Full width Export Button at bottom */}
-      <View style={styles.btnWrapper}>
+      {/* <View style={styles.btnWrapper}>
         <Button title="Export Data" color={isDark ? "#22c55e" : undefined} onPress={() => alert("Exported!")} />
-      </View>
+      </View> */}
     </View>
   );
 }

@@ -8,6 +8,7 @@ import { supabase } from '../supabase';
 const API_URL = process.env.EXPO_PUBLIC_PORT || ""
 const REFRESH_TIMEOUT = 1000; // Delay for UX consistency after setting data
 
+
 // Helper function to introduce a delay
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
@@ -227,7 +228,7 @@ export default function PredictionSection() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload),
         }),
-        sleep(3000) // 3-second delay ⏳
+         sleep(3000)// 3-second delay ⏳
       ]);
 
       if (!response.ok) {

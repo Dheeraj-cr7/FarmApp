@@ -1,5 +1,5 @@
-import { useRouter } from "expo-router";
-import { useEffect, useState } from "react";
+import { useFocusEffect, useRouter } from "expo-router";
+import { useCallback, useState } from "react";
 import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, View } from "react-native";
 import { supabase } from '../../supabase'; // Assuming supabase client is imported
 import { useTheme } from "../themeContext"; // adjust path if needed
@@ -24,7 +24,7 @@ export default function HomeScreen() {
   const { theme } = useTheme();
   const isDark = theme === "dark";
   const router = useRouter();
-
+  
   const [stats, setStats] = useState(initialStats);
 
   // Theme color map
@@ -111,15 +111,23 @@ export default function HomeScreen() {
   };
 
   // Combined fetch on mount
-  useEffect(() => {
-    const loadData = async () => {
-      const id = await fetchUserId();
-      if (id) {
-        fetchSensorData(id);
-      }
-    };
-    loadData();
-  }, []);
+  useFocusEffect(
+    // useCallback is required here
+    useCallback(() => {
+        const loadData = async () => {
+            // Re-fetch user ID and all sensor data
+            const id = await fetchUserId();
+            if (id) {
+                fetchSensorData(id);
+            } else {
+                // Ensure loading is false if fetchUserId fails to get an ID
+                setStats(prev => ({ ...prev, isLoading: false }));
+            }
+        };
+
+        loadData();
+    }, []) // Dependency array is empty so it runs every time the screen is focused
+  );
 
 
   // --- Recommendation Logic (Simplified) ---

@@ -13,12 +13,12 @@ export default function RecommendationScreen() {
     >
 
       {/* Title */}
-      <Text
+      {/* <Text
         className="text-2xl font-bold mb-4"
         style={{ color: isDark ? "#fff" : "#333" }}
       >
         Recommendations
-      </Text>
+      </Text> */}
 
       {/* Prediction Section */}
       <PredictionSection />
