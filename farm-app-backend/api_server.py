@@ -13,7 +13,7 @@ from xgboost import XGBClassifier
 # --- API CONFIGURATION ---
 app = Flask(__name__)
 CORS(app) 
-PORT = 5000 
+PORT = 3000 
 
 # --- MODEL CONFIGURATION (UPDATED) ---
 MODEL_DIR = 'models'
