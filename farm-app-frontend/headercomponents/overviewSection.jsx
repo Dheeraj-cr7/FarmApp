@@ -1,73 +1,20 @@
-import { useEffect, useState } from "react";
-import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
+import { useCallback, useEffect, useState } from "react"; // Added useCallback for useFocusEffect support
+import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, View } from "react-native";
 
-// --- MOCK IMPORTS FOR RUNNABILITY ---
-// NOTE: In a real Expo app, 'supabase' and 'useTheme' would be imported from external files.
+import { useFocusEffect } from "expo-router";
+import { useTheme } from "../app/themeContext";
+import { supabase } from '../supabase';
 
-// 1. Mock Theme Hook
-const useTheme = () => {
-  // Always return 'light' or 'dark' for styling.
-  const [theme, setTheme] = useState('light'); // Can be toggled if needed
-  useEffect(() => {
-    // Simulate initial theme setting
-    setTheme('dark'); 
-  }, []);
-  return { theme };
-};
 
-// 2. Mock Data (Simulating data fetched from Supabase after successful signup)
-const MOCK_USER_ID = "mock-user-123";
-const MOCK_FARMER_DETAILS = {
-  current_crop: "Rice",
-  default_temp: 32.5,
-  default_humidity: 75.2,
-  default_rainfall: 5.1,
-  farm_size_acres: 5.0,
-  farm_location: "Maharashtra",
-  soil_type: "Black",
-  fertilizer_history: "Applied 50kg Urea last month (NPK 18:46:0)",
-};
-
-const MOCK_CROP_DATA = {
-  nitrogen: 85.5, // N (kg/ha)
-  phosphorus: 45.2, // P (kg/ha)
-  potassium: 42.1, // K (kg/ha)
-  ph: 6.2,
-  soil_moisture: 55.7, // %
-  predicted_disease: "None (Healthy)",
-  confidence_score: 0.98,
-};
-
-// 3. Mock Supabase Client and Fetcher
-const mockSupabase = {
-  // Simulates fetching two different tables simultaneously
-  fetchInitialData: (userId) => {
-    return new Promise((resolve) => {
-      // Simulate network delay
-      setTimeout(() => {
-        if (userId === MOCK_USER_ID) {
-          resolve({
-            farmerDetails: MOCK_FARMER_DETAILS,
-            cropData: MOCK_CROP_DATA,
-            error: null,
-          });
-        } else {
-          resolve({
-            farmerDetails: null,
-            cropData: null,
-            error: "User not found or data missing.",
-          });
-        }
-      }, 1500); // 1.5 second delay
-    });
-  },
-};
-// --- END MOCK IMPORTS ---
+// --- REAL IMPORTS (MOCKED FOR SINGLE FILE RUNNABILITY IN THIS ENVIRONMENT) ---
+// Since I cannot access your actual imports, these minimal mocks are left 
+// only to prevent compilation errors here, but they should be replaced by
+// your actual imports in your app (as per the commented lines above).
 
 // Helper component for displaying key-value pairs
 const StatPill = ({ label, value, color, isDark }) => (
-  <View style={[styles.statPill, { 
-    backgroundColor: isDark ? '#1f2937' : '#e0f2f1', 
+  <View style={[styles.statPill, {
+    backgroundColor: isDark ? '#1f2937' : '#e0f2f1',
     borderColor: isDark ? '#4b5563' : color,
   }]}>
     <Text style={[styles.statLabel, { color: isDark ? '#9ca3af' : '#475569' }]}>{label}</Text>
@@ -80,39 +27,114 @@ export default function OverviewSection() {
   const { theme } = useTheme();
   const isDark = theme === "dark";
 
+  // State to hold the user ID and fetched data
+  const [userId, setUserId] = useState(null);
   const [details, setDetails] = useState(null);
   const [cropData, setCropData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  useEffect(() => {
-    // In a real app, userId would come from a user context (e.g., useAuth())
-    const userId = MOCK_USER_ID; 
-    
-    // Fetch data using the mock Supabase client
-    const loadData = async () => {
-      setLoading(true);
-      const result = await mockSupabase.fetchInitialData(userId);
-      
-      if (result.error) {
-        console.error("Data fetch error:", result.error);
-        setError(result.error);
-      } else {
-        setDetails(result.farmerDetails);
-        setCropData(result.cropData);
-      }
-      setLoading(false);
-    };
+  // --- CORE DATA FETCHING LOGIC ---
 
-    loadData();
+  const fetchUserId = async () => {
+    try {
+      const { data: { session }, error } = await supabase.auth.getSession();
+      if (error) throw error;
+      setUserId(session?.user?.id || null);
+    } catch (e) {
+      console.error("Auth Fetch Error:", e.message);
+      Alert.alert("Auth Error", "Failed to get session. Please log in.");
+      setUserId(null);
+      setLoading(false);
+    }
+  };
+
+  const fetchFarmData = async (currentUserId) => {
+    if (!currentUserId) {
+      setLoading(false);
+      return;
+    }
+
+    setError(null);
+    setLoading(true);
+
+    try {
+      // 1. Fetch Farmer Details (Assuming the table name is 'farmer_details')
+      const { data: detailsData, error: detailsError } = await supabase
+        .from('farmer_details')
+        .select('current_crop, default_temp, default_humidity, default_rainfall, farm_size_acres, farm_location, soil_type, fertilizer_history')
+        .eq('user_id', currentUserId)
+        .single();
+
+      // PGRST116 is the code for "No rows found" in Supabase, which is expected for new users.
+      if (detailsError && detailsError.code !== 'PGRST116') throw detailsError;
+      setDetails(detailsData || {});
+
+      // 2. Fetch Latest Crop Data (Assuming the table name is 'crop_data')
+      const { data: cropData, error: cropError } = await supabase
+        .from('crop_data')
+        .select('nitrogen, phosphorus, potassium, ph, soil_moisture, predicted_disease, confidence_score')
+        .eq('user_id', currentUserId)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single();
+
+      if (cropError && cropError.code !== 'PGRST116') throw cropError;
+      setCropData(cropData || {});
+
+    } catch (e) {
+      console.error("Data fetch error:", e.message);
+      setError(`Failed to load farm data: ${e.message}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+
+  // 1. Fetch User ID on component mount
+  useEffect(() => {
+    fetchUserId();
   }, []);
 
+  // 2. Use the commented-out block below with useFocusEffect 
+  //    if this component is part of a React Navigation stack.
+
+  useEffect(() => {
+    if (userId) {
+      fetchFarmData(userId);
+    } else if (userId === null) {
+      // User ID is null, but we are still loading, so wait for auth to resolve
+      setLoading(true);
+    } else {
+      // userId is defined but falsy (e.g., explicit null from fetchUserId if no session)
+      setLoading(false);
+      setDetails(null);
+      setCropData(null);
+      setError("User not authenticated or session expired.");
+    }
+  }, [userId]); // Dependency array ensures fetch is called when userId is set
+
+
+
+
+  useFocusEffect(
+    useCallback(() => {
+      // useCallback is required here to prevent infinite loops in the React Native environment.
+      if (userId) {
+        fetchFarmData(userId);
+      }
+    }, [userId])
+  );
+
+
+
+  // --- Render Configuration ---
   const containerStyle = { backgroundColor: isDark ? "#121212" : "#f0fdf4" };
   const titleColor = isDark ? "#fff" : "#059669";
   const cardBackground = isDark ? "#1e1e1e" : "#fff";
   const cardBorder = isDark ? "#333" : "#e5e7eb";
   const textColor = isDark ? "#d1d5db" : "#374151";
-  
+
   if (loading) {
     return (
       <View style={[styles.loadingContainer, containerStyle]}>
@@ -127,16 +149,16 @@ export default function OverviewSection() {
       <View style={[styles.container, containerStyle]}>
         <Text style={[styles.title, { color: titleColor }]}>Overview</Text>
         <View style={[styles.card, { backgroundColor: cardBackground, borderColor: cardBorder }]}>
-            <Text style={{ color: isDark ? "#ef4444" : "#b91c1c", fontWeight: 'bold' }}>
-              Error Loading Data: {error || "No farmer or crop data found. Please complete the setup."}
-            </Text>
+          <Text style={{ color: isDark ? "#ef4444" : "#b91c1c", fontWeight: 'bold' }}>
+            Error Loading Data: {error || "No data found. Please ensure you are logged in and have completed the farm setup."}
+          </Text>
         </View>
       </View>
     );
   }
 
-  // --- Render with Fetched Data ---
-  
+  // --- Render with Fetched Data (Ensure fields are accessed safely) ---
+
   // Helper for displaying rainfall
   const getRainfallDisplay = (rainfallValue) => {
     const precip = parseFloat(rainfallValue);
@@ -145,101 +167,102 @@ export default function OverviewSection() {
     }
     return 'None';
   };
-  
+
   // Helper for predicted disease
   const getDiseaseColor = (disease) => {
-      return disease.toLowerCase().includes('healthy') ? '#34d399' : '#f97316';
+    return disease?.toLowerCase().includes('healthy') ? '#34d399' : '#f97316';
   };
 
   return (
     <View style={[styles.container, containerStyle]}>
-      
-      <Text style={[styles.title, { color: titleColor }]}>Farm Overview & Health</Text>
+      <ScrollView >
 
-      {/* 1. Farm Context and Climate Card */}
-      <View style={[styles.card, { backgroundColor: cardBackground, borderColor: cardBorder }]}>
-        <Text style={[styles.cardTitle, { color: titleColor }]}>Farm Context</Text>
-        
-        <View style={styles.contextRow}>
-          <Text style={[styles.label, { color: textColor }]}>Location:</Text>
-          <Text style={[styles.value, { color: isDark ? '#fff' : '#1f2937', fontWeight: 'bold' }]}>
-            {details.farm_location}
-          </Text>
-        </View>
-        <View style={styles.contextRow}>
-          <Text style={[styles.label, { color: textColor }]}>Farm Size:</Text>
-          <Text style={[styles.value, { color: isDark ? '#fff' : '#1f2937' }]}>
-            {details.farm_size_acres} acres
-          </Text>
-        </View>
-        <View style={styles.contextRow}>
-          <Text style={[styles.label, { color: textColor }]}>Soil Type:</Text>
-          <Text style={[styles.value, { color: isDark ? '#fff' : '#1f2937' }]}>
-            {details.soil_type}
-          </Text>
-        </View>
-        
-        {/* Climate Data Pills */}
-        <Text style={[styles.cardSubtitle, { color: isDark ? '#9ca3af' : '#6b7280' }]}>Recent Climate Snapshot</Text>
-        <View style={styles.pillsContainer}>
-          <StatPill label="Temp (°C)" value={details.default_temp} color="#3b82f6" isDark={isDark} />
-          <StatPill label="Humidity (%)" value={details.default_humidity} color="#3b82f6" isDark={isDark} />
-          <StatPill label="Rainfall" value={getRainfallDisplay(details.default_rainfall)} color="#3b82f6" isDark={isDark} />
-        </View>
-      </View>
+        <Text style={[styles.title, { color: titleColor }]}>Farm Overview & Health</Text>
 
-      {/* 2. Crop Health and Soil Analysis Card */}
-      <View style={[styles.card, { backgroundColor: cardBackground, borderColor: cardBorder }]}>
-        <Text style={[styles.cardTitle, { color: titleColor }]}>Current Crop: {details.current_crop}</Text>
-        
-        {/* Disease Prediction */}
-        <View style={[styles.predictionBox, { backgroundColor: isDark ? '#18272f' : '#f0f9ff' }]}>
+        {/* 1. Farm Context and Climate Card */}
+        <View style={[styles.card, { backgroundColor: cardBackground, borderColor: cardBorder }]}>
+          <Text style={[styles.cardTitle, { color: titleColor }]}>Farm Context</Text>
+
+          <View style={styles.contextRow}>
+            <Text style={[styles.label, { color: textColor }]}>Location:</Text>
+            <Text style={[styles.value, { color: isDark ? '#fff' : '#1f2937', fontWeight: 'bold' }]}>
+              {details.farm_location || 'N/A'}
+            </Text>
+          </View>
+          <View style={styles.contextRow}>
+            <Text style={[styles.label, { color: textColor }]}>Farm Size:</Text>
+            <Text style={[styles.value, { color: isDark ? '#fff' : '#1f2937' }]}>
+              {details.farm_size_acres ? `${details.farm_size_acres} acres` : 'N/A'}
+            </Text>
+          </View>
+          <View style={styles.contextRow}>
+            <Text style={[styles.label, { color: textColor }]}>Soil Type:</Text>
+            <Text style={[styles.value, { color: isDark ? '#fff' : '#1f2937' }]}>
+              {details.soil_type || 'N/A'}
+            </Text>
+          </View>
+
+          {/* Climate Data Pills */}
+          <Text style={[styles.cardSubtitle, { color: isDark ? '#9ca3af' : '#6b7280' }]}>Recent Climate Snapshot</Text>
+          <View style={styles.pillsContainer}>
+            <StatPill label="Temp (°C)" value={details.default_temp || 'N/A'} color="#3b82f6" isDark={isDark} />
+            <StatPill label="Humidity (%)" value={details.default_humidity || 'N/A'} color="#3b82f6" isDark={isDark} />
+            <StatPill label="Rainfall" value={getRainfallDisplay(details.default_rainfall || 0)} color="#3b82f6" isDark={isDark} />
+          </View>
+        </View>
+
+        {/* 2. Crop Health and Soil Analysis Card */}
+        <View style={[styles.card, { backgroundColor: cardBackground, borderColor: cardBorder }]}>
+          <Text style={[styles.cardTitle, { color: titleColor }]}>Current Crop: {details.current_crop || 'N/A'}</Text>
+
+          {/* Disease Prediction */}
+          <View style={[styles.predictionBox, { backgroundColor: isDark ? '#18272f' : '#f0f9ff' }]}>
             <Text style={[styles.predictionLabel, { color: isDark ? '#9ca3af' : '#6b7280' }]}>AI Prediction</Text>
             <Text style={[styles.predictionStatus, { color: getDiseaseColor(cropData.predicted_disease) }]}>
-                {cropData.predicted_disease}
+              {cropData.predicted_disease || 'Awaiting Data'}
             </Text>
             <Text style={[styles.predictionConfidence, { color: textColor }]}>
-                Confidence: {(cropData.confidence_score * 100).toFixed(0)}%
+              Confidence: {cropData.confidence_score ? `${(cropData.confidence_score * 100).toFixed(0)}%` : 'N/A'}
             </Text>
+          </View>
+
+          {/* Soil NPK and Moisture Data Pills */}
+          <Text style={[styles.cardSubtitle, { color: isDark ? '#9ca3af' : '#6b7280' }]}>Soil Nutrients & Moisture</Text>
+          <View style={styles.pillsContainer}>
+            <StatPill label="Nitrogen (N)" value={cropData.nitrogen ? `${cropData.nitrogen} kg/ha` : 'N/A'} color="#ef4444" isDark={isDark} />
+            <StatPill label="Phosphorus (P)" value={cropData.phosphorus ? `${cropData.phosphorus} kg/ha` : 'N/A'} color="#f59e0b" isDark={isDark} />
+            <StatPill label="Potassium (K)" value={cropData.potassium ? `${cropData.potassium} kg/ha` : 'N/A'} color="#14b8a6" isDark={isDark} />
+          </View>
+          <View style={styles.pillsContainer}>
+            <StatPill label="pH Level" value={cropData.ph || 'N/A'} color="#2563eb" isDark={isDark} />
+            <StatPill label="Soil Moisture (%)" value={cropData.soil_moisture ? `${cropData.soil_moisture}%` : 'N/A'} color="#22c55e" isDark={isDark} />
+          </View>
+
         </View>
-        
-        {/* Soil NPK and Moisture Data Pills */}
-        <Text style={[styles.cardSubtitle, { color: isDark ? '#9ca3af' : '#6b7280' }]}>Soil Nutrients & Moisture</Text>
-        <View style={styles.pillsContainer}>
-          <StatPill label="Nitrogen (N)" value={`${cropData.nitrogen} kg/ha`} color="#ef4444" isDark={isDark} />
-          <StatPill label="Phosphorus (P)" value={`${cropData.phosphorus} kg/ha`} color="#f59e0b" isDark={isDark} />
-          <StatPill label="Potassium (K)" value={`${cropData.potassium} kg/ha`} color="#14b8a6" isDark={isDark} />
-        </View>
-        <View style={styles.pillsContainer}>
-          <StatPill label="pH Level" value={cropData.ph} color="#2563eb" isDark={isDark} />
-          <StatPill label="Soil Moisture (%)" value={`${cropData.soil_moisture}%`} color="#22c55e" isDark={isDark} />
-        </View>
-        
-      </View>
-      
-      {/* Fertilizer History Footer */}
-      <View style={[styles.footerCard, { backgroundColor: isDark ? '#1e1e1e' : '#ecfdf5', borderColor: isDark ? '#333' : '#a7f3d0' }]}>
+
+        {/* Fertilizer History Footer */}
+        <View style={[styles.footerCard, { backgroundColor: isDark ? '#1e1e1e' : '#ecfdf5', borderColor: isDark ? '#333' : '#a7f3d0' }]}>
           <Text style={[styles.footerText, { color: isDark ? '#9ca3af' : '#047857', fontWeight: 'bold' }]}>
-              Fertilizer History:
+            Fertilizer History:
           </Text>
           <Text style={[styles.footerText, { color: isDark ? '#d1d5db' : '#065f46' }]}>
-              {details.fertilizer_history || 'No recent history recorded.'}
+            {details.fertilizer_history || 'No recent history recorded.'}
           </Text>
-      </View>
-      
+        </View>
+      </ScrollView>
+
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { 
-    flex: 1, 
-    padding: 16,
-    paddingVertical: 24,
+  container: {
+    flex: 1,
+    paddingHorizontal: 16,
   },
   loadingContainer: {
-    flex: 1, 
-    justifyContent: "center", 
+    flex: 1,
+    justifyContent: "center",
     alignItems: "center",
   },
   statusText: {
@@ -247,16 +270,16 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '500',
   },
-  title: { 
-    fontSize: 24, 
-    fontWeight: "800", 
-    marginBottom: 20, 
-    textAlign: 'center' 
+  title: {
+    fontSize: 24,
+    fontWeight: "800",
+    marginBottom: 20,
+    textAlign: 'center'
   },
-  card: { 
-    padding: 20, 
-    borderRadius: 15, 
-    borderWidth: 1, 
+  card: {
+    padding: 20,
+    borderRadius: 15,
+    borderWidth: 1,
     marginBottom: 20,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },

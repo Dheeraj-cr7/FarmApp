@@ -18,7 +18,7 @@ const RefreshIcon = () => <Text style={{ fontSize: 18, marginRight: 5 }}>🔄</T
 
 // Initial state structure
 const initialSensorData = {
-  crop_name: "Rice",
+  crop_name: "",
   n: 0, p: 0, k: 0, ph: 0,
   soil_moisture: 0,
 };
@@ -136,7 +136,6 @@ export default function PredictionSection() {
   };
 
   // --- Data Setting Functions ---
-
   const updateSupabaseData = async (newValues, scenarioName) => {
     if (!userId) {
       Alert.alert("Error", "User ID is required to update the database.");
@@ -162,10 +161,10 @@ export default function PredictionSection() {
         return;
       }
 
-      // Prepare the update payload
+      // Prepare the update payload 
       const updatePayload = {
         ...newValues,
-        crop_name: 'Rice', // Hardcoding Rice for demo consistency
+        crop_name: sensorData.crop_name, // Not hardcoded
         predicted_disease: '',
         confidence_score: null,
         created_at: new Date().toISOString() // Force update timestamp
@@ -181,7 +180,10 @@ export default function PredictionSection() {
       // Introduce a short delay for the DB update to register properly before fetching
       await sleep(REFRESH_TIMEOUT);
 
-      Alert.alert("Scenario Set", `${scenarioName} data set successfully! Click 'Refresh' to view.`);
+      // Automatically fetch data after setting a scenario
+      await fetchSensorData(userId);
+
+      Alert.alert("Scenario Set", `${scenarioName} data set successfully! Sensor data has been updated.`);
 
     } catch (e) {
       console.error(`Error setting ${scenarioName}:`, e.message);
@@ -228,7 +230,7 @@ export default function PredictionSection() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload),
         }),
-         sleep(3000)// 3-second delay ⏳
+        sleep(3000)// 3-second delay ⏳
       ]);
 
       if (!response.ok) {
@@ -243,10 +245,12 @@ export default function PredictionSection() {
 
       const data = await response.json();
 
-      // FIX: Get BOTH status labels from the API response
+      // Extract results
       const specificDisease = data.predicted_disease;
       const genericStatus = data.predicted_health;
+      const confidenceScore = data.confidence_score || null;
 
+      // --- ADVICE GENERATION (Needed to save to history_data) ---
       let riskLevel = "Optimal";
       let adviceText = "Current conditions are ideal. Maintain management practices.";
 
@@ -269,6 +273,72 @@ export default function PredictionSection() {
           adviceText = `Warning: ${specificDisease} detected. Immediate action required. Consult an agronomist for detailed steps.`;
         }
       }
+      // --- END ADVICE GENERATION ---
+
+
+      // --- NEW: INSERT Prediction into history_data table (New Row) ---
+      const historyPayload = {
+        user_id: userId,
+        crop_name: sensorData.crop_name,
+        // Save the sensor inputs used for the prediction
+        n_input: sensorData.n,
+        p_input: sensorData.p,
+        k_input: sensorData.k,
+        ph_input: sensorData.ph,
+        soil_moisture_input: sensorData.soil_moisture,
+        // Save the model outputs and advice
+        predicted_disease: specificDisease,
+        predicted_health: genericStatus,
+        confidence_score: confidenceScore,
+        advice_given: adviceText,
+      };
+
+      const { error: historyInsertError } = await supabase
+        .from('history_data')
+        .insert([historyPayload]);
+
+      if (historyInsertError) {
+        console.error("History Insert Error:", historyInsertError);
+        // Log error but continue to update crop_data/UI
+        Alert.alert("History Save Failed", "Could not save prediction history.");
+      } else {
+        console.log("Prediction history saved successfully to history_data.");
+      }
+      // --- END HISTORY INSERT ---
+
+
+      // --- UPDATE existing crop_data row (for dashboard summary view) ---
+
+      // 1. Find the most recent row ID
+      const { data: latestRow, error: fetchIdError } = await supabase
+        .from('crop_data')
+        .select('id')
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single();
+
+      if (fetchIdError && fetchIdError.code !== 'PGRST116') throw fetchIdError;
+
+      if (latestRow) {
+        // 2. Prepare the prediction update payload
+        const predictionUpdatePayload = {
+          predicted_disease: specificDisease,
+          // REMOVED: predicted_health, based on schema cache error
+          confidence_score: confidenceScore,
+        };
+
+        // 3. Perform the update
+        const { error: updateError } = await supabase
+          .from('crop_data')
+          .update(predictionUpdatePayload)
+          .eq('id', latestRow.id);
+
+        if (updateError) throw updateError;
+        console.log("Crop data summary updated successfully (without predicted_health).");
+      }
+      // --- END CROP_DATA UPDATE ---
+
 
       // FIX: Set the prediction state with both labels
       setPrediction({
@@ -279,8 +349,8 @@ export default function PredictionSection() {
       });
 
     } catch (e) {
-      console.error("Prediction API Error:", e.message);
-      Alert.alert("Prediction Failed", e.message || "Could not connect to the model API. Check API URL and server status.");
+      console.error("Prediction API/Supabase Error:", e.message);
+      Alert.alert("Prediction Failed", e.message || "Could not complete prediction and save results.");
       setPrediction({ error: e.message });
     } finally {
       setIsPredicting(false);
@@ -313,7 +383,7 @@ export default function PredictionSection() {
   // --- Render Component ---
 
   const isBusy = isLoading || isPredicting || isSettingData;
-  const predictDisabled = isBusy || !dataFetched || !userId;
+  const predictDisabled = isBusy || !dataFetched || !userId || !sensorData.crop_name;
   const setDisabled = isBusy || !userId;
 
   const themeColors = {
@@ -335,19 +405,7 @@ export default function PredictionSection() {
       <View style={[styles.card, { backgroundColor: themeColors.cardBg, borderColor: themeColors.border }]}>
         <View style={styles.headerRow}>
           <Text style={[styles.subtitle, { color: themeColors.text, fontWeight: '600' }]}>Latest Sensor Readings</Text>
-          <TouchableOpacity
-            onPress={handleRefresh}
-            disabled={isBusy || !userId}
-            style={[styles.refreshBtn, { backgroundColor: isDark ? '#333' : '#eee', opacity: (isBusy || !userId) ? 0.5 : 1 }]}
-          >
-            {isLoading && !isPredicting && !isSettingData ? (
-              <ActivityIndicator size="small" color={themeColors.text} />
-            ) : (
-              <Text style={[styles.refreshText, { color: themeColors.text }]}>
-                <RefreshIcon /> {dataFetched ? 'Refresh' : 'Load Data'}
-              </Text>
-            )}
-          </TouchableOpacity>
+
         </View>
 
         {isBusy && !dataFetched ? (
@@ -356,7 +414,7 @@ export default function PredictionSection() {
           <Text style={{ color: themeColors.danger, fontWeight: "bold" }}>Error: User not authenticated.</Text>
         ) : (
           <>
-            <Text style={{ color: themeColors.text, marginTop: 5 }}>Crop: {sensorData.crop_name}</Text>
+            <Text style={{ color: themeColors.text, marginTop: 5 }}>Crop: {sensorData.crop_name || 'N/A'}</Text>
             <Text style={{ color: themeColors.text }}>Nitrogen (N): {formatValue(sensorData.n)}</Text>
             <Text style={{ color: themeColors.text }}>Phosphorus (P): {formatValue(sensorData.p)}</Text>
             <Text style={{ color: themeColors.text }}>Potassium (K): {formatValue(sensorData.k)}</Text>

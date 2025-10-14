@@ -28,7 +28,7 @@ export default function ProfileScreen() {
           // 2. Fetch Profile Name from 'profiles' table using the user's ID
           const { data: profileData, error: profileError } = await supabase
             .from('profiles')
-            .select('full_name') // Assuming the column storing the name is 'name'
+            .select('full_name') // Assuming the column storing the name is 'full_name'
             .eq('id', user.id) // Assuming the profile table primary key is the user ID
             .single();
 
@@ -70,6 +70,7 @@ export default function ProfileScreen() {
   const themeColors = {
     text: isDark ? "#fff" : "#333",
     label: isDark ? "#bbb" : "#555",
+    copyright: isDark ? "#777" : "#999", // New color for copyright
     cardBg: isDark ? "#1e1e1e" : "#f9f9f9",
     borderColor: isDark ? "#333" : "#ddd",
     primary: isDark ? "#007bff" : "#007bff",
@@ -106,16 +107,6 @@ export default function ProfileScreen() {
             />
           </View>
         </View>
-
-        <TouchableOpacity style={[styles.option, { borderBottomColor: themeColors.borderColor }]}>
-          <Text style={[styles.optionText, { color: themeColors.primary }]}>Change Password</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={[styles.option, { borderBottomColor: themeColors.borderColor }]}>
-          <Text style={[styles.optionText, { color: themeColors.primary }]}>Notifications</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.option}>
-          <Text style={[styles.optionText, { color: themeColors.primary }]}>Privacy</Text>
-        </TouchableOpacity>
       </View>
 
       <TouchableOpacity
@@ -124,6 +115,11 @@ export default function ProfileScreen() {
       >
         <Text style={styles.logoutText}>Logout</Text>
       </TouchableOpacity>
+
+      {/* --- Copyright Content --- */}
+      <Text style={[styles.copyright, { color: themeColors.copyright }]}>
+        © GHRCE 2025
+      </Text>
     </View>
   );
 }
@@ -135,8 +131,14 @@ const styles = StyleSheet.create({
   label: { fontSize: 16, fontWeight: "600", marginTop: 5 },
   value: { fontSize: 16, marginBottom: 10 },
   optionRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
-  option: { paddingVertical: 10, borderBottomWidth: 1, },
+  option: { paddingVertical: 0 },
   optionText: { fontSize: 16 },
-  logoutBtn: { padding: 15, borderRadius: 10, alignItems: "center", marginTop: "auto" },
+  logoutBtn: { padding: 15, borderRadius: 10, alignItems: "center", marginTop: 20 },
   logoutText: { color: "#fff", fontWeight: "bold", fontSize: 16 },
+  copyright: {
+    fontSize: 12,
+    textAlign: 'center',
+    marginTop: 'auto', // Pushes it to the bottom
+    paddingTop: 10,
+  }
 });
