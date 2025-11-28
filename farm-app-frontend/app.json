@@ -1,0 +1,9 @@
+{
+  "android": {
+    "package": "com.anonymous.farmapp"
+  },
+  "plugins": [
+    "expo-router",
+    "expo-web-browser"
+  ]
+}
